@@ -1,0 +1,29 @@
+
+---
+
+## **步驟 3：數據拆分 (ReadMe.md)**
+
+```markdown
+# 步驟 3：數據拆分
+
+## 目標
+本步驟將 `combined_{date}.csv` 轉換為機器學習適用格式：
+- 拆分 `B_Field.csv`、`H_Field.csv`
+- 轉換數據格式，每行代表一筆測試點的完整波形數據
+
+## 使用方法
+
+### 1. **確保 `combined_{date}.csv` 已存在**
+- 需先完成 **步驟 2**，確保 `./combine/combined_{date}.csv` 存在
+
+### 2. **確保 `waveforms/` 內含完整波形數據**
+- `Wave_file_name` 欄位指定的檔案應存於 `./waveforms/`
+- 檔案名稱應與 `combined_{date}.csv` 一致
+- 範例：
+
+
+
+### 3. **執行 Python 腳本**
+- 執行以下指令：
+```bash
+python step3_split_data.py
