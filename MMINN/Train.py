@@ -91,53 +91,38 @@ def get_dataloader(data_B,
                    data_Hdc,
                    data_Pcv,
                    n_init=16):
-    """ #*(Date:250105)
-    Process data and return DataLoader for training, validation, and testing.
-
-    Parameters
-    ----------
-    data_B : np.array
-        Magnetic flux density data.
-    data_F : np.array
-        Frequency data.
-    data_T : np.array
-        Temperature data.
-    data_N : np.array
-        Turns data.
-    data_Hdc : np.array
-        DC Magnetic field strength data.
-    data_H : np.array
-        AC Magnetic field strength data.
-    data_Pcv : np.array
-        Core loss data.
-    norm : list
-        Normalization parameters for the features.
-    n_init : int
-        Number of initial data points for magnetization.
-
-    Returns
-    -------
-        train_loader, valid_loader : DataLoader
-        Dataloaders for training, validation
-        norm
-    """
 
     # Data pre-process
 
     # 1. Down-sample to 128 points
-    seq_length = downsample
-    #range(start, stop, step)
-    # cols = range(0, 8192, int(8192 / seq_length))
-    cols = np.linspace(0, 1023, seq_length, dtype=int)
-    data_B = data_B[:, cols]
-    data_H = data_H[:, cols]
+    seq_length = 1024
+    # seq_length = downsample
+    # cols = np.linspace(0, 1023, seq_length, dtype=int)
+    # data_B = data_B[:, cols]
+    # data_H = data_H[:, cols]
 
     # 2. Add extra points for initial magnetization calculation
     data_length = seq_length + n_init
     data_B = np.hstack((data_B[:, -n_init:], data_B))
     data_H = np.hstack((data_H[:, -n_init:], data_H))
 
-    # 3. Format data into tensors  #*(Date:241216) seq_length=128, data_length=144
+    # 3. 取得 per-profile 最大絕對值 (batch,1,1)
+    eps = 1e-8  # 防止除以 0
+
+    scale_B = torch.max(torch.abs(B), dim=1, keepdim=True).values + eps
+    scale_H = torch.max(torch.abs(H), dim=1, keepdim=True).values + eps
+
+    dB = torch.diff(B, dim=1, prepend=B[:, :1])
+    dB_dt = dB * (seq_length * F.view(-1, 1, 1))
+    d2B = torch.diff(dB, dim=1, prepend=dB[:, :1])
+    d2B_dt = d2B * (seq_length * F.view(-1, 1, 1))
+
+    # 5. 進行 per-profile scaling 到 [-1,1]
+    in_B = (B / scale_B)  # [-1,1]
+    out_H = (H / scale_H)  # 目標值
+    in_dB_dt = (dB_dt / scale_B)  # 同樣除以 scale_B
+    in_d2B_dt = (d2B_dt / scale_B)
+
     B = torch.from_numpy(data_B).view(-1, data_length, 1).float()
     H = torch.from_numpy(data_H).view(-1, data_length, 1).float()
     F = torch.log10(torch.from_numpy(data_F).view(-1, 1).float())
