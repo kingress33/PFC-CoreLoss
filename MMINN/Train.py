@@ -60,7 +60,7 @@ torch.backends.cudnn.benchmark = False
 # %%
 material = "CH467160_Buck"
 down_sample_way = "linspace_n_init2"
-downsample = 128
+downsample = 1024
 
 # 訓練情況況
 plot_interval = 300
@@ -94,68 +94,60 @@ def get_dataloader(data_B,
 
     # Data pre-process
 
-    # 1. Down-sample to 128 points
-    seq_length = 1024
-    # seq_length = downsample
-    # cols = np.linspace(0, 1023, seq_length, dtype=int)
-    # data_B = data_B[:, cols]
-    # data_H = data_H[:, cols]
+    # ── 0. 全域設定/降階設定 ──────────────────────────────
+    eps = 1e-8  # 防止除以 0
+    if downsample == 1024:
+        seq_length = 1024  # 單筆波形點數 (不再 down-sample)
+    else:
+        seq_length = downsample
+        cols = np.linspace(0, 1023, seq_length, dtype=int)
+        data_B = data_B[:, cols]
+        data_H = data_H[:, cols]
 
-    # 2. Add extra points for initial magnetization calculation
+    # ── 1. 波形拼接 (補 n_init 點作初始磁化) ────
     data_length = seq_length + n_init
-    data_B = np.hstack((data_B[:, -n_init:], data_B))
+    data_B = np.hstack((data_B[:, -n_init:], data_B))  # (batch, data_length)
     data_H = np.hstack((data_H[:, -n_init:], data_H))
 
-    # 3. 取得 per-profile 最大絕對值 (batch,1,1)
-    eps = 1e-8  # 防止除以 0
-
-    scale_B = torch.max(torch.abs(B), dim=1, keepdim=True).values + eps
-    scale_H = torch.max(torch.abs(H), dim=1, keepdim=True).values + eps
-
-    dB = torch.diff(B, dim=1, prepend=B[:, :1])
-    dB_dt = dB * (seq_length * F.view(-1, 1, 1))
-    d2B = torch.diff(dB, dim=1, prepend=dB[:, :1])
-    d2B_dt = d2B * (seq_length * F.view(-1, 1, 1))
-
-    # 5. 進行 per-profile scaling 到 [-1,1]
-    in_B = (B / scale_B)  # [-1,1]
-    out_H = (H / scale_H)  # 目標值
-    in_dB_dt = (dB_dt / scale_B)  # 同樣除以 scale_B
-    in_d2B_dt = (d2B_dt / scale_B)
-
-    B = torch.from_numpy(data_B).view(-1, data_length, 1).float()
+    # ── 2. 轉成 Tensor ───────────────────────────
+    B = torch.from_numpy(data_B).view(-1, data_length, 1).float()  # (B,N,1)
     H = torch.from_numpy(data_H).view(-1, data_length, 1).float()
-    F = torch.log10(torch.from_numpy(data_F).view(-1, 1).float())
+    F = torch.log10(torch.from_numpy(data_F).view(-1, 1).float())  # 純量
     T = torch.from_numpy(data_T).view(-1, 1).float()
     Hdc = torch.from_numpy(data_Hdc).view(-1, 1).float()
     N = torch.from_numpy(data_N).view(-1, 1).float()
     Pcv = torch.log10(torch.from_numpy(data_Pcv).view(-1, 1).float())
 
-    # 原本在6. 因要先計算標準化故移至這
+    # ── 3. 每筆樣本各自找最大幅值 (per-profile scale) ─
+    scale_B = torch.max(torch.abs(B), dim=1,
+                        keepdim=True).values + eps  # (B,1,1)
+    scale_H = torch.max(torch.abs(H), dim=1, keepdim=True).values + eps
 
-    dB = torch.diff(B, dim=1)
-    dB = torch.cat((dB[:, 0:1], dB), dim=1)
-    dB_dt = dB * (seq_length * F.view(-1, 1, 1))
-
-    in_dB = torch.diff(B, dim=1)
-    in_dB = torch.cat((in_dB[:, 0:1], in_dB), dim=1)
-
-    d2B = torch.diff(dB, dim=1)  # *二階導數(version:250520)
-    d2B = torch.cat((d2B[:, 0:1], d2B), dim=1)  # *填充首點(version:250520)
+    # ── 4. 先計算導數，再除以 scale_B ─────────────
+    dB = torch.diff(B, dim=1, prepend=B[:, :1])
+    dB_dt = dB * (seq_length * F.view(-1, 1, 1))  # 真實斜率
+    d2B = torch.diff(dB, dim=1, prepend=dB[:, :1])
     d2B_dt = d2B * (seq_length * F.view(-1, 1, 1))
 
-    #  4. Compute normalization parameters (均值 & 標準差)**
-    # ! 溫度頻率不變加入微小的 epsilon
+    # ── 5. 形成模型輸入 (已經縮放到 [-1,1]) ────────
+    in_B = B / scale_B
+    out_H = H / scale_H  # 預測目標
+    in_dB_dt = dB_dt / scale_B
+    in_d2B_dt = d2B_dt / scale_B
+
+    # ── 6. 純量特徵：計算 z-score 參數 ─────────────
+    def safe_mean_std(tensor, eps=1e-8):
+        m = torch.mean(tensor).item()
+        s = torch.std(tensor).item()
+        return [m, 1.0 if s < eps else s]
+
+    #  Compute normalization parameters (均值 & 標準差)**
     norm = [
-        safe_mean_std(B),  # 0: B
-        safe_mean_std(H),  # 1: H
-        safe_mean_std(F),  # 2: F
-        safe_mean_std(T),  # 3: T
-        safe_mean_std(d2B_dt),  # 4: dB/dt
-        safe_mean_std(Pcv),  # 5: Pcv
-        safe_mean_std(Hdc),  # 6: Hdc
-        safe_mean_std(N),  # 7: N
-        safe_mean_std(d2B)  # *8: d2B/dt2(version:250520)
+        safe_mean_std(F),
+        safe_mean_std(T),
+        safe_mean_std(Hdc),
+        safe_mean_std(N),
+        safe_mean_std(Pcv)
     ]
 
     # 用來做test固定標準化參數的
@@ -164,53 +156,66 @@ def get_dataloader(data_B,
     for param in norm:
         print(f"    {param},")
     print("]")
+    print("0.F, 1.T, 2.Hdc, 3.N, 4.Pcv")
 
-    # 5. Data Normalization
-    in_B = (B - norm[0][0]) / norm[0][1]  # B
-    out_H = (H - norm[1][0]) / norm[1][1]  # H
-    in_F = (F - norm[2][0]) / norm[2][1]  # F
-    in_T = (T - norm[3][0]) / norm[3][1]  # T
+    # Data Normalization
+    in_F = (F - norm[0][0]) / norm[0][1]  # F
+    in_T = (T - norm[1][0]) / norm[1][1]  # T
+    in_Hdc = (Hdc - norm[2][0]) / norm[2][1]  # Hdc
+    in_N = (N - norm[3][0]) / norm[3][1]  # N
+    in_Pcv = (Pcv - norm[4][0]) / norm[4][1]  # Pcv
 
-    in_Pcv = (Pcv - norm[5][0]) / norm[5][1]  # Pcv
-    in_Hdc = (Hdc - norm[6][0]) / norm[6][1]  # Hdc
-    in_N = (N - norm[7][0]) / norm[7][1]  # N
-    in_d2B = (d2B_dt - norm[8][0]) / norm[8][1]  # *d2B/dt2(version:250520)
-    in_dB_dt = (dB_dt - norm[4][0]) / norm[4][1]
+    #   → 方便推論復原，保留 scale_B, scale_H 當作額外純量
+    aux_features = torch.cat(
+        (in_F, in_T, in_Hdc, in_N, in_Pcv, scale_B.squeeze(-1),
+         scale_H.squeeze(-1)),  # (batch, 7)
+        dim=1)
 
-    # 6. Extra features
+    # ── 7. 產生初始 Preisach operator 狀態 s0 ──────
     max_B, _ = torch.max(in_B, dim=1)
     min_B, _ = torch.min(in_B, dim=1)
-    s0 = get_operator_init(in_B[:, 0] - in_dB[:, 0], in_dB, max_B, min_B)
+    s0 = get_operator_init(in_B[:, 0] - dB[:, 0] / scale_B.squeeze(-1),
+                           dB / scale_B, max_B, min_B)
 
-    # 7. Create dataloader to speed up data processing
+    # ── 8. 組合 Dataset ───────────────────────────
+    wave_inputs = torch.cat(
+        (
+            in_B,  # ① B
+            dB / scale_B,  # ② ΔB
+            in_dB_dt,  # ③ dB/dt
+            in_d2B_dt),
+        dim=2)  # ④ d²B/dt²   → (B,L,4)
+
+    aux_features = torch.cat((in_F, in_T, in_Hdc, in_N), dim=1)  # (B,4)
+
+    # 這裡把 Pcv（已 z-score）單獨拿出來當另一個 label
+    target_Pcv = in_Pcv  # (B,1)
+
     full_dataset = torch.utils.data.TensorDataset(
-        torch.cat((in_B, in_dB, in_dB_dt, in_d2B),
-                  dim=2),  # B 部分（144 點） # !Add d2B
-        torch.cat((in_F, in_T, in_Hdc, in_N, in_Pcv), dim=1),  # 輔助變量
-        s0,  # 初始狀態
-        out_H)
+        wave_inputs,  # 0  → 模型序列輸入
+        aux_features,  # 1  → 4 個純量
+        s0,  # 2  → Preisach 初始狀態
+        out_H,  # 3  → 目標 H  (已 scale_H)
+        target_Pcv)  # 4  → 目標 Pcv (已 z-score)
 
-    # Split dataset into train, validation, and test sets (60:20:20)
+    # ── 9. Train / Valid split & DataLoader ───────
     train_size = int(0.8 * len(full_dataset))
     valid_size = len(full_dataset) - train_size
-
-    train_dataset, valid_dataset = torch.utils.data.random_split(
+    train_set, valid_set = torch.utils.data.random_split(
         full_dataset, [train_size, valid_size],
         generator=torch.Generator().manual_seed(Config.SEED))
 
-    train_loader = torch.utils.data.DataLoader(train_dataset,
+    train_loader = torch.utils.data.DataLoader(train_set,
                                                batch_size=Config.BATCH_SIZE,
                                                shuffle=True,
-                                               num_workers=0,
                                                collate_fn=filter_input)
 
-    valid_loader = torch.utils.data.DataLoader(valid_dataset,
+    valid_loader = torch.utils.data.DataLoader(valid_set,
                                                batch_size=Config.BATCH_SIZE,
                                                shuffle=False,
-                                               num_workers=0,
                                                collate_fn=filter_input)
 
-    return train_loader, valid_loader, norm
+    return train_loader, valid_loader, downsample
 
 
 # %% Predict the operator state at t0
@@ -244,27 +249,19 @@ def get_operator_init(B1,
 
 
 def filter_input(batch):
-    inputs, features, s0, target_H = zip(*batch)
+    inputs, features, s0, target_H, target_Pcv = zip(*batch)
 
-    # 如果 inputs 是 tuple，先堆疊成張量
-    inputs = torch.stack(inputs)  # B 的所有輸入部分（144 點）
+    inputs = torch.stack(inputs)  # (B,L,4)
+    features = torch.stack(features)  # (B,4)
+    s0 = torch.stack(s0)
+    target_H = torch.stack(target_H)[:, -downsample:, :]  # 保留全長
+    target_Pcv = torch.stack(target_Pcv)  # (B,1)
 
-    # 保留 in_B, in_dB, in_dB_dt, in_d2B_dt 作為模型輸入
-    inputs = inputs[:, :, :4]
-
-    # 保留 in_F, in_T, in_Hdc, in_N (排除 in_Pcv，in_Pcv要放在最面)
-    features = torch.stack(features)[:, :4]
-
-    # 保留目標值 H
-    target_H = torch.stack(
-        target_H)[:, -downsample:, :]  # ?只取最後 128 點 (改1024看狀況有無變好)
-
-    s0 = torch.stack(s0)  # 初始狀態
-
-    return inputs, features, s0, target_H
+    # 依你的訓練程式回傳；例如：
+    return inputs, features, s0, target_H, target_Pcv
 
 
-# ! 溫度頻率不變加入微小的 epsilon
+# 溫度頻率不變加入微小的 epsilon
 def safe_mean_std(tensor, eps=1e-8):
     m_tensor = torch.mean(tensor)  # 還是 Tensor
     s_tensor = torch.std(tensor)  # 還是 Tensor
@@ -273,7 +270,6 @@ def safe_mean_std(tensor, eps=1e-8):
     s_val = s_tensor.item()
     if s_val < eps:
         s_val = 1.0
-
     return [m_val, s_val]  # 直接回傳 float
 
 
@@ -286,8 +282,8 @@ def safe_mean_std(tensor, eps=1e-8):
     Parameters:
     - hidden_size: number of eddy current slices (RNN neuron)
     - operator_size: number of operators
-# !  - input_size: number of inputs (1.B 2.dB 3.dB/dt 4.d2B/dt)
-# ! - var_size: number of supplenmentary variables (1.F 2.T 3.Hdc 4.N)        
+    - input_size: number of inputs (1.B 2.dB 3.dB/dt 4.d2B/dt)
+    - var_size: number of supplenmentary variables (1.F 2.T 3.Hdc 4.N)        
     - output_size: number of outputs (1.H)
     
     只先把d2B/dt考量在EddyCell裡面
@@ -407,7 +403,6 @@ class EddyCell(nn.Module):
         return hidden
 
 
-# %%
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -432,9 +427,9 @@ def load_dataset(material, base_path="./Data/"):
     data_B = np.genfromtxt(in_file1, delimiter=',')  # N x 1024
     data_F = np.genfromtxt(in_file2, delimiter=',')  # N x 1
     data_T = np.genfromtxt(in_file3, delimiter=',')  # N x 1
-    data_H = np.genfromtxt(in_file4, delimiter=',')  # N x 1024  # *250317新增
+    data_H = np.genfromtxt(in_file4, delimiter=',')  # N x 1024
     data_Pcv = np.genfromtxt(in_file5, delimiter=',')  # N x 1
-    data_Hdc = np.genfromtxt(in_file6, delimiter=',')  # N x 1  # *250317新增
+    data_Hdc = np.genfromtxt(in_file6, delimiter=',')  # N x 1
     data_N = np.genfromtxt(in_file7, delimiter=',')  # N x 1
 
     return data_B, data_F, data_T, data_H, data_Pcv, data_Hdc, data_N
@@ -672,6 +667,26 @@ if __name__ == "__main__":
                                                       data_H, data_N, data_Hdc,
                                                       data_Pcv)
 
-    train_model(norm, train_loader, valid_loader)
+# ---- 印第一個 batch 檢查 ----
+inputs, features, s0, target_H, target_Pcv = next(iter(train_loader))
+
+print("=== Batch shape check ===")
+print(f"inputs      : {inputs.shape}")  # (batch, seq_len, 4)
+print(f"features    : {features.shape}")  # (batch, 4)
+print(f"s0          : {s0.shape}")  # (batch, operator_size)
+print(f"target_H    : {target_H.shape}")  # (batch, seq_len, 1)
+print(f"target_Pcv  : {target_Pcv.shape}")  # (batch, 1)
+print()
+
+# 選一筆樣本看看數值範圍
+idx = 0
+print("範例 inputs[0] (前 3 個時間點):")
+print(inputs[idx, :3, :])  # B, ΔB, dB/dt, d²B/dt² (已歸一化到 ~[-1,1])
+print("範例 features[0]:", features[idx])  # F, T, Hdc, N (已 z-score)
+print("範例 s0[0]:", s0[idx, :5])  # 前 5 個 Preisach operator 狀態
+print("範例 target_H[0] (前 3 點):", target_H[idx, :3, 0])
+print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
+
+# train_model(norm, train_loader, valid_loader)
 
 
