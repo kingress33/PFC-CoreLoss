@@ -17,7 +17,8 @@ gc.collect()
 # 
 
 # %%
-import os
+import 
+
 import torch
 import numpy as np
 import random
@@ -61,6 +62,7 @@ torch.backends.cudnn.benchmark = False
 material = "CH467160_Buck"
 down_sample_way = "linspace_n_init2"
 downsample = 1024
+save_figure = False
 
 # 訓練情況況
 plot_interval = 300
@@ -257,8 +259,8 @@ def filter_input(batch):
     target_H = torch.stack(target_H)[:, -downsample:, :]  # 保留全長
     target_Pcv = torch.stack(target_Pcv)  # (B,1)
 
-    # 依你的訓練程式回傳；例如：
-    return inputs, features, s0, target_H, target_Pcv
+    # return inputs, features, s0, target_H, target_Pcv
+    return inputs, features, s0, target_H
 
 
 # 溫度頻率不變加入微小的 epsilon
@@ -309,9 +311,8 @@ class MMINet(nn.Module):
 
         self.rnn1 = StopOperatorCell(self.operator_size)
         self.dnn1 = nn.Linear(self.operator_size + self.var_size, 1)
-        self.rnn2 = EddyCell(
-            7, self.hidden_size,
-            output_size)  #!250520更新：5 (F, T, B, dB/dt, d2B/dt ) + 2 (Hdc, N)
+        #!250520更新：5 (F, T, B, dB/dt, d2B/dt ) + 2 (Hdc, N)
+        self.rnn2 = EddyCell(7, self.hidden_size, output_size)
         self.dnn2 = nn.Linear(self.hidden_size, 1)
 
         self.rnn2_hx = None
@@ -329,8 +330,8 @@ class MMINet(nn.Module):
 
         # !Initialize DNN2 input (1.B 2.dB/dt 3.d2B)
         # x2 = torch.cat((x[:, :, 0:1], x[:, :, 2:3]), dim=2)
-        x2 = torch.cat((x[:, :, 0:1], x[:, :, 2:4]),
-                       dim=2)  # !選取 B, dB/dt, d2B
+        # !選取 B, dB/dt, d2B/dt
+        x2 = torch.cat((x[:, :, 0:1], x[:, :, 2:4]), dim=2)
 
         for t in range(seq_size):
             # RNN1 input (dB,state)
@@ -560,12 +561,11 @@ def train_model(norm, train_loader, valid_loader):
             plt.ylabel("Value")
             plt.grid(alpha=0.5)
             plt.legend()
-            figure_save_path1 = os.path.join(
-                figure_save_base_path,
-                f"Compare_Epoch {epoch + 1}.svg")  # 定義模型保存檔名
-
-            plt.savefig(figure_save_path1)
-            # 顯示圖表
+            if save_figure == True:
+                figure_save_path1 = os.path.join(
+                    figure_save_base_path,
+                    f"Compare_Epoch {epoch + 1}.svg")  # 定義模型保存檔名
+                plt.savefig(figure_save_path1)
             plt.show()
             # # -------------------------設定圖表B-H比較 END---------------------------------------
         # ======================================================繪製訓練情況  END ======================================================
@@ -607,9 +607,11 @@ def train_model(norm, train_loader, valid_loader):
     plt.title("Training & Validation Loss Curve")
     plt.legend()
     plt.grid(alpha=0.5)
-    figure_save_path2 = os.path.join(figure_save_base_path,
-                                     "Training_Loss_Curve.svg")  # 定義模型保存檔名
-    plt.savefig(figure_save_path2)
+    if save_figure == True:
+        # 將圖表保存為 SVG 格式
+        figure_save_path2 = os.path.join(figure_save_base_path,
+                                         "Training_Validation_Loss_Curve.svg")
+        plt.savefig(figure_save_path2)
     plt.show()
     # ==============================繪製 Train Loss 與 Validation Loss 圖 END==============================
 
@@ -647,10 +649,11 @@ def train_model(norm, train_loader, valid_loader):
     plt.ylabel("Value")
     plt.grid(alpha=0.5)
     plt.legend()
-    figure_save_path3 = os.path.join(
-        figure_save_base_path,
-        "Best Model_Predicted vs Target.svg")  # 定義模型保存檔名
-    plt.savefig(figure_save_path3)
+    if save_figure == True:
+        figure_save_path3 = os.path.join(
+            figure_save_base_path,
+            "Best Model_Predicted vs Target.svg")  # 定義模型保存檔名
+        plt.savefig(figure_save_path3)
 
     # ===================================使用最佳模型來產生驗證結果 END=============================
 
@@ -668,14 +671,15 @@ if __name__ == "__main__":
                                                       data_Pcv)
 
 # ---- 印第一個 batch 檢查 ----
-inputs, features, s0, target_H, target_Pcv = next(iter(train_loader))
+# inputs, features, s0, target_H, target_Pcv = next(iter(train_loader))
+inputs, features, s0, target_H = next(iter(train_loader))
 
 print("=== Batch shape check ===")
 print(f"inputs      : {inputs.shape}")  # (batch, seq_len, 4)
 print(f"features    : {features.shape}")  # (batch, 4)
 print(f"s0          : {s0.shape}")  # (batch, operator_size)
 print(f"target_H    : {target_H.shape}")  # (batch, seq_len, 1)
-print(f"target_Pcv  : {target_Pcv.shape}")  # (batch, 1)
+# print(f"target_Pcv  : {target_Pcv.shape}")  # (batch, 1)
 print()
 
 # 選一筆樣本看看數值範圍
@@ -685,8 +689,8 @@ print(inputs[idx, :3, :])  # B, ΔB, dB/dt, d²B/dt² (已歸一化到 ~[-1,1])
 print("範例 features[0]:", features[idx])  # F, T, Hdc, N (已 z-score)
 print("範例 s0[0]:", s0[idx, :5])  # 前 5 個 Preisach operator 狀態
 print("範例 target_H[0] (前 3 點):", target_H[idx, :3, 0])
-print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
+# print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
 
-# train_model(norm, train_loader, valid_loader)
+train_model(norm, train_loader, valid_loader)
 
 
