@@ -5,16 +5,15 @@
 # ## Step0: Import Package & Hyperparameter Configuration
 
 # %%
-# 清空所有變數
-%reset -f  
-# 強制 Python 回收記憶體
-import gc
-gc.collect()  
+# # 清空所有變數
+# %reset -f
+# # 強制 Python 回收記憶體
+# import gc
+# gc.collect()
 
 # %% [markdown]
-# 
 # ### Package
-# 
+#
 
 # %%
 import os
@@ -23,13 +22,13 @@ import numpy as np
 import random
 import torch.nn as nn
 from torch.autograd import Variable
-from torch.utils.data import DataLoader, TensorDataset
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-from torchmetrics import MeanSquaredLogError
+import time
+from datetime import datetime
 
 # %% [markdown]
 # ### Hyperparameter Config
+
 
 # %%
 # %%
@@ -37,7 +36,7 @@ from torchmetrics import MeanSquaredLogError
 class Config:
     SEED = 1
     NUM_EPOCHS = 3000
-    BATCH_SIZE = 128
+    BATCH_SIZE = 256
     LEARNING_RATE = 0.002  #論文提供
     LR_SCHEDULER_GAMMA = 0.99  #論文提供
     DECAY_EPOCH = 200
@@ -54,25 +53,26 @@ torch.manual_seed(Config.SEED)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-
 # %% [markdown]
 # ### Material & Number of Data
 
 # %%
 material = "CH467160_Buck"
 fix_way = "perChannelScaling_MLP"
+note = "n_init2"
 downsample = 1024
 save_figure = True
+timestamp = datetime.now().strftime("%Y%m%d")
 
 # 訓練情況況
-plot_interval = 300
-train_show_sample = 2
+plot_interval = 150
+train_show_sample = 1
 
 # 定義保存模型的路徑
 model_save_dir = f"./Model/{fix_way}/{downsample}/"
 os.makedirs(model_save_dir, exist_ok=True)  # 如果路徑不存在，創建路徑
 model_save_path = os.path.join(model_save_dir,
-                               f"{material}_n_init2.pt")  # 定義模型保存檔名
+                               f"{material}_{note}_{timestamp}.pt")  # 定義模型保存檔名
 
 figure_save_base_path = f"./figure/{fix_way}/{downsample}/"
 os.makedirs(figure_save_base_path, exist_ok=True)  # 如果路徑不存在，創建路徑
@@ -81,7 +81,8 @@ os.makedirs(figure_save_base_path, exist_ok=True)  # 如果路徑不存在，創
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # %% [markdown]
-# ## Step1: Data processing and data loader generate 
+# ## Step1: Data processing and data loader generate
+
 
 # %%
 # %% Preprocess data into a data loader
@@ -215,6 +216,7 @@ def get_dataloader(data_B,
         batch_size=Config.BATCH_SIZE,
         shuffle=True,
         #    num_workers=4,
+        pin_memory=True,
         collate_fn=filter_input)
 
     valid_loader = torch.utils.data.DataLoader(
@@ -222,6 +224,7 @@ def get_dataloader(data_B,
         batch_size=Config.BATCH_SIZE,
         shuffle=False,
         #    num_workers=4,
+        pin_memory=True,
         collate_fn=filter_input)
 
     return train_loader, valid_loader, norm
@@ -232,7 +235,7 @@ def get_operator_init(B1,
                       dB,
                       Bmax,
                       Bmin,
-                      max_out_H=5,
+                      max_out_H=1,
                       operator_size=Config.OPERATOR_SIZE):
     """Compute the initial state of hysteresis operators"""
     s0 = torch.zeros((dB.shape[0], operator_size))
@@ -255,19 +258,6 @@ def get_operator_init(B1,
                     else:
                         s0[i, j] = B1[i] + (r - Bmax[i])
     return s0
-
-
-# def filter_input(batch):
-#     inputs, features, s0, target_H, target_Pcv = zip(*batch)
-
-#     inputs = torch.stack(inputs)  # (B,L,4)
-#     features = torch.stack(features)  # (B,4)
-#     s0 = torch.stack(s0)
-#     target_H = torch.stack(target_H)[:, -downsample:, :]  # 保留全長
-#     target_Pcv = torch.stack(target_Pcv)  # (B,1)
-
-#     # return inputs, features, s0, target_H, target_Pcv
-#     return inputs, features, s0, target_H
 
 
 def filter_input(batch):
@@ -314,6 +304,7 @@ def safe_mean_std(tensor, eps=1e-8):
 
 
 class MMINet(nn.Module):
+
     def __init__(
             self,
             norm,
@@ -338,10 +329,14 @@ class MMINet(nn.Module):
         self.rnn2_hx = None
 
         self.loss_mlp = nn.Sequential(
-            nn.Linear(self.var_size, 16),  # var_size=4: F, T, Hdc, N
+            nn.Linear(self.var_size + 1,
+                      64),  # var_size=4: F, T, Hdc, N + 1 for P_prelim
             nn.ReLU(),
-            nn.Linear(16, 1)  # 輸出 residual s
-        )
+            nn.Dropout(0.2),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            nn.Linear(32, 1))
 
     def forward(self, x, var, amps, s0, n_init=16):
         """
@@ -402,14 +397,17 @@ class MMINet(nn.Module):
         H_amp = output[:, n_init:, :] * amp_H.unsqueeze(1)
         P_prelim = torch.trapz(H_amp, B_amp, axis=1) * (10**(
             var[:, 0:1] * self.norm[0][1] + self.norm[0][0]))
-        P_prelim = (P_prelim - self.norm[0][0]) / self.norm[0][1]
-        s = self.loss_mlp(var)
-        Pcv_mlp = P_prelim + s
+        Pcv_log = torch.log10(P_prelim.clamp(min=1e-12))
+        Pcv = (Pcv_log - self.norm[4][0]) / self.norm[4][1]
+        mlp_input = torch.cat((var, Pcv), dim=1)  # (batch, 5)
+        s = self.loss_mlp(mlp_input)
+        Pcv_mlp = Pcv + s
 
         return H, Pcv_mlp
 
 
 class StopOperatorCell():
+
     def __init__(self, operator_size):
         self.operator_thre = torch.from_numpy(
             np.linspace(5 / operator_size, 5, operator_size)).view(1, -1)
@@ -425,6 +423,7 @@ class StopOperatorCell():
 
 
 class EddyCell(nn.Module):
+
     def __init__(self, input_size, hidden_size, output_size=1):
         super().__init__()
         self.input_size = input_size
@@ -443,11 +442,13 @@ class EddyCell(nn.Module):
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
+
 # %% [markdown]
 # ## Step3: Training the Model
 
 # %% [markdown]
 # ### Load Dataset
+
 
 # %%
 # %%
@@ -475,11 +476,20 @@ def load_dataset(material, base_path="./Data/"):
 # %% [markdown]
 # ### Train Code
 
+
 # %%
 def train_model(norm, train_loader, valid_loader):
 
+    start_time = time.perf_counter()
     model = MMINet(norm=norm).to(device)
+    print("=== Start Train  ===")
+    print(r"""
+    (\_/)
+    ( •_•)
+    / > 拜託順利阿
+    """)
     print("Number of parameters: ", count_parameters(model))
+
     criterion_H = nn.MSELoss()
     criterion_Pcv = nn.MSELoss()
 
@@ -491,25 +501,34 @@ def train_model(norm, train_loader, valid_loader):
     train_losses = []
     val_losses = []
     fixed_idx = None
+    epoch_times = []  # ← 用來保存每個 epoch 的時間
 
     for epoch in range(Config.NUM_EPOCHS):
+        t0 = time.perf_counter()
+
         model.train()
         train_loss = 0
 
-        for inputs, features, amps, s0, target_H, target_Pcv in valid_loader:
+        for inputs, features, amps, s0, target_H, target_Pcv in train_loader:
             inputs, features, amps, s0, target_H, target_Pcv = inputs.to(
                 device), features.to(device), amps.to(device), s0.to(
                     device), target_H.to(device), target_Pcv.to(device)
 
             optimizer.zero_grad()
-            outputs_H, outputs_Pcv = model(inputs, features, amps, s0)  # 模型的輸出
 
-            loss_H = criterion_H(outputs_H, target_H)  # 使用真實的 H(t) 計算損失
-            loss_Pcv = criterion_Pcv(outputs_Pcv, target_Pcv)
-
-            # 動態加權
-            α = (epoch + 1) / Config.NUM_EPOCHS
-            loss = (1 - α) * loss_H + α * loss_Pcv
+            with torch.autocast(device_type="cuda"):
+                outputs_H, outputs_Pcv = model(inputs, features, amps,
+                                               s0)  # 模型的輸出
+                loss_H = criterion_H(outputs_H, target_H)  # 使用真實的 H(t) 計算損失
+                loss_Pcv = criterion_Pcv(outputs_Pcv, target_Pcv)
+                # if epoch < 1000:
+                #     loss = loss_H
+                # else:
+                #     alpha = (epoch + 1) / Config.NUM_EPOCHS
+                #     loss = (1 - alpha) * loss_H + alpha * loss_Pcv
+                alpha = 0.5
+                # alpha = (epoch + 1) / Config.NUM_EPOCHS
+                loss = (1 - alpha) * loss_H + alpha * loss_Pcv
 
             loss.backward()
             optimizer.step()
@@ -531,14 +550,29 @@ def train_model(norm, train_loader, valid_loader):
                                                s0)  # 模型的輸出
                 loss_H = criterion_H(outputs_H, target_H)  # 使用真實的 H(t) 計算損失
                 loss_Pcv = criterion_Pcv(outputs_Pcv, target_Pcv)
-                α = (epoch + 1) / Config.NUM_EPOCHS
-                val_loss += ((1 - α) * loss_H + α * loss_Pcv).item()
+                # if epoch < 1000:
+                #     loss = loss_H
+                # else:
+                #     alpha = (epoch + 1) / Config.NUM_EPOCHS
+                #     loss = (1 - alpha) * loss_H + alpha * loss_Pcv
+
+                # alpha = (epoch + 1) / Config.NUM_EPOCHS
+                alpha = 0.5
+                loss = (1 - alpha) * loss_H + alpha * loss_Pcv
+
+                val_loss += loss.item()
 
         val_loss /= len(valid_loader)
         val_losses.append(val_loss)  # **記錄 Validation Loss**
 
+        # ─── 計算並輸出這個 epoch 的耗時 ───────────
+        te = time.perf_counter() - t0
+        epoch_times.append(te)
         print(
-            f"Epoch {epoch+1}, Train Loss: {train_loss:.6f}, Validation Loss: {val_loss:.6f}"
+            f"Epoch {epoch+1}, loss_H: {loss_H.item():.6f}, loss_Pcv: {loss_Pcv.item():.6f}"
+        )
+        print(
+            f"Epoch {epoch+1} | Train Loss: {train_loss:.6f} | Val Loss: {val_loss:.6f} | Time: {te:.2f}s"
         )
 
         # ======================================================繪製訓練情況======================================================
@@ -636,6 +670,11 @@ def train_model(norm, train_loader, valid_loader):
         # ======================================================Early stop======================================================
 
     print(f"Training complete. Best model saved at {model_save_path}.")
+    elapsed = time.perf_counter() - start_time  # ← 訓練結束，計算耗時
+    hrs = int(elapsed // 3600)
+    mins = int((elapsed % 3600) // 60)
+    secs = elapsed % 60
+    print(f"訓練總耗時：{hrs} 小時 {mins} 分 {secs:.2f} 秒")
 
     # ==============================繪製 Train Loss 與 Validation Loss 圖==============================
     plt.figure(figsize=(10, 5))
@@ -668,15 +707,16 @@ def train_model(norm, train_loader, valid_loader):
     model.eval()
 
     with torch.no_grad():
-        for inputs, features, s0, target_H in valid_loader:
-            inputs, features, s0, target_H = inputs.to(device), features.to(
-                device), s0.to(device), target_H.to(device)
+        for inputs, features, amps, s0, target_H, target_Pcv in valid_loader:
+            inputs, features, amps, s0, target_H, target_Pcv = inputs.to(
+                device), features.to(device), amps.to(device), s0.to(
+                    device), target_H.to(device), target_Pcv.to(device)
 
-            outputs = model(inputs, features, s0)  # 使用最佳模型產生預測值
+            outputs_H, outputs_Pcv = model(inputs, features, amps, s0)
             break  # 只使用一批驗證數據進行可視化
 
     # 選取對應資料（index tensor 要先轉 list 才能 index numpy）
-    outputs_np = outputs[fixed_idx, -downsample:, 0].detach().cpu().numpy()
+    outputs_np = outputs_H[fixed_idx, -downsample:, 0].detach().cpu().numpy()
     targets_np = target_H[fixed_idx, -downsample:, 0].detach().cpu().numpy()
     B_seq_np = inputs[fixed_idx, -downsample:, 0].detach().cpu().numpy()
 
@@ -705,11 +745,17 @@ def train_model(norm, train_loader, valid_loader):
 
     # ===================================使用最佳模型來產生驗證結果 END=============================
 
+
 # %% [markdown]
 # ### Start Train!!!
 
+
 # %%
-if __name__ == "__main__":
+def main():
+    # # 這段放在檔案最前面（import 之後）
+    # BASE_DIR = Path(__file__).resolve().parent
+    # os.chdir(BASE_DIR)
+    # print("👉 Switch CWD to script folder:", os.getcwd())
 
     data_B, data_F, data_T, data_H, data_Pcv, data_Hdc, data_N = load_dataset(
         material)
@@ -718,27 +764,30 @@ if __name__ == "__main__":
                                                       data_H, data_N, data_Hdc,
                                                       data_Pcv)
 
-# ---- 印第一個 batch 檢查 ----
-# inputs, features, s0, target_H, target_Pcv = next(iter(train_loader))
-inputs, features, amps, s0, target_H, target_Pcv = next(iter(train_loader))
+    # ---- 印第一個 batch 檢查 ----
+    # inputs, features, s0, target_H, target_Pcv = next(iter(train_loader))
+    inputs, features, amps, s0, target_H, target_Pcv = next(iter(train_loader))
 
-print("=== Batch shape check ===")
-print(f"inputs      : {inputs.shape}")  # (batch, seq_len, 4)
-print(f"features    : {features.shape}")  # (batch, 4)
-print(f"s0          : {s0.shape}")  # (batch, operator_size)
-print(f"target_H    : {target_H.shape}")  # (batch, seq_len, 1)
-# print(f"target_Pcv  : {target_Pcv.shape}")  # (batch, 1)
-print()
+    print("=== Batch shape check ===")
+    print(f"inputs      : {inputs.shape}")  # (batch, seq_len, 4)
+    print(f"features    : {features.shape}")  # (batch, 4)
+    print(f"s0          : {s0.shape}")  # (batch, operator_size)
+    print(f"target_H    : {target_H.shape}")  # (batch, seq_len, 1)
+    # print(f"target_Pcv  : {target_Pcv.shape}")  # (batch, 1)
+    print()
 
-# 選一筆樣本看看數值範圍
-idx = 0
-print("範例 inputs[0] (前 3 個時間點):")
-print(inputs[idx, :3, :])  # B, ΔB, dB/dt, d²B/dt² (已歸一化到 ~[-1,1])
-print("範例 features[0]:", features[idx])  # F, T, Hdc, N (已 z-score)
-print("範例 s0[0]:", s0[idx, :5])  # 前 5 個 Preisach operator 狀態
-print("範例 target_H[0] (前 3 點):", target_H[idx, :3, 0])
-# print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
+    # 選一筆樣本看看數值範圍
+    idx = 0
+    print("範例 inputs[0] (前 3 個時間點):")
+    print(inputs[idx, :3, :])  # B, ΔB, dB/dt, d²B/dt² (已歸一化到 ~[-1,1])
+    print("範例 features[0]:", features[idx])  # F, T, Hdc, N (已 z-score)
+    print("範例 s0[0]:", s0[idx, :5])  # 前 5 個 Preisach operator 狀態
+    print("範例 target_H[0] (前 3 點):", target_H[idx, :3, 0])
+    # print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
 
-train_model(norm, train_loader, valid_loader)
+    train_model(norm, train_loader, valid_loader)
 
 
+# %%
+if __name__ == "__main__":
+    main()
