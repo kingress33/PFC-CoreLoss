@@ -25,8 +25,6 @@ from torch.autograd import Variable
 import matplotlib.pyplot as plt
 import time
 from datetime import datetime
-import json
-import subprocess
 
 # %% [markdown]
 # ### Hyperparameter Config
@@ -59,7 +57,7 @@ torch.backends.cudnn.benchmark = False
 # ### Material & Number of Data
 
 # %%
-material = "CH467160"
+material = "CH467160_Buck"
 fix_way = "perChannelScaling_MLP"
 note = "n_init2"
 downsample = 1024
@@ -476,59 +474,11 @@ def load_dataset(material, base_path="./Data/"):
 
 
 # %% [markdown]
-# ### Train Logger
-
-
-# %%
-class TrainLogger:
-
-    def __init__(self, exp_name, config_dict, result_dir):
-        self.exp_name = exp_name
-        self.result_dir = result_dir
-        self.config = config_dict
-        os.makedirs(self.result_dir, exist_ok=True)
-
-        self._save_config()
-        self._write_metadata()
-
-    def _save_config(self):
-        with open(os.path.join(self.result_dir, "config.json"), "w") as f:
-            json.dump(self.config, f, indent=2)
-
-    def _write_metadata(self):
-        metadata = {
-            "experiment_name": self.exp_name,
-            "timestamp": datetime.now().isoformat()
-        }
-        with open(os.path.join(self.result_dir, "meta.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
-
-    def save_summary(self, best_epoch, best_val_loss, best_loss_H,
-                     best_loss_Pcv, model_save_path, elapsed):
-        summary = {
-            "exp_name": self.exp_name,
-            "timestamp": datetime.now().isoformat(),
-            "duration_sec": elapsed,
-            "config": self.config,
-            "best_model": {
-                "path": model_save_path,
-                "epoch": best_epoch,
-                "val_loss": best_val_loss,
-                "loss_H": best_loss_H,
-                "loss_Pcv": best_loss_Pcv
-            },
-            "note": note
-        }
-        with open(os.path.join(self.result_dir, "summary.json"), "w") as f:
-            json.dump(summary, f, indent=2)
-
-
-# %% [markdown]
 # ### Train Code
 
 
 # %%
-def train_model(norm, train_loader, valid_loader, logger):
+def train_model(norm, train_loader, valid_loader):
 
     start_time = time.perf_counter()
     model = MMINet(norm=norm).to(device)
@@ -547,17 +497,11 @@ def train_model(norm, train_loader, valid_loader, logger):
 
     # Loss 記錄
     best_val_loss = float('inf')
-    # Early stopping 紀錄
     patience_counter = 0
     train_losses = []
     val_losses = []
     fixed_idx = None
-    # 保存每個 epoch 的時間
-    epoch_times = []
-    # Logger 紀錄
-    best_epoch = 0
-    best_loss_H = 0
-    best_loss_Pcv = 0
+    epoch_times = []  # ← 用來保存每個 epoch 的時間
 
     for epoch in range(Config.NUM_EPOCHS):
         t0 = time.perf_counter()
@@ -711,10 +655,6 @@ def train_model(norm, train_loader, valid_loader, logger):
         # ======================================================Early stop======================================================
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_val_loss = val_loss
-            best_epoch = epoch + 1
-            best_loss_H = loss_H.item()
-            best_loss_Pcv = loss_Pcv.item()
             torch.save(model.state_dict(), model_save_path)  # 保存最佳模型
             print(
                 f"Saving model at epoch {epoch+1} with validation loss {val_loss:.6f}..."
@@ -735,8 +675,6 @@ def train_model(norm, train_loader, valid_loader, logger):
     mins = int((elapsed % 3600) // 60)
     secs = elapsed % 60
     print(f"訓練總耗時：{hrs} 小時 {mins} 分 {secs:.2f} 秒")
-    logger.save_summary(best_epoch, best_val_loss, best_loss_H, best_loss_Pcv,
-                        model_save_path, elapsed)
 
     # ==============================繪製 Train Loss 與 Validation Loss 圖==============================
     plt.figure(figsize=(10, 5))
@@ -847,21 +785,7 @@ def main():
     print("範例 target_H[0] (前 3 點):", target_H[idx, :3, 0])
     # print("範例 target_Pcv[0]:", target_Pcv[idx, 0])
 
-    # 產生 Logger（放在 train_model 前）
-    result_dir = os.path.join("results",
-                              f"{timestamp}_{fix_way}_{material}_{note}")
-    logger = TrainLogger(
-        exp_name=f"{material}_{note}_{timestamp}",
-        config_dict={
-            k: getattr(Config, k)
-            for k in dir(Config)
-            if not k.startswith('__') and not callable(getattr(Config, k))
-        },
-        result_dir=result_dir)
-
-    train_model(norm, train_loader, valid_loader, logger)  # logger
-
-    # train_model(norm, train_loader, valid_loader)
+    train_model(norm, train_loader, valid_loader)
 
 
 # %%
