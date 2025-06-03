@@ -1,0 +1,25 @@
+{
+  "exp_name": "CH467160_AddAugmentation_20250602",
+  "timestamp": "2025-06-02T20:38:36.397863",
+  "duration_sec": 9249.140570699936,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 500,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "./Model/perChannelScaling_MLP/1024/CH467160_AddAugmentation_20250602.pt",
+    "epoch": 118,
+    "val_loss": 0.428584357102712,
+    "loss_H": 0.0033715886529535055,
+    "loss_Pcv": 0.8832776546478271
+  },
+  "note": "AddAugmentation"
+}
