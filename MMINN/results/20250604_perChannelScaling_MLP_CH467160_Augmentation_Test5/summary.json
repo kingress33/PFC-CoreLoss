@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_Augmentation_Test5_20250604",
+  "timestamp": "2025-06-04T02:08:41.607334",
+  "duration_sec": 6116.58848679997,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250604_perChannelScaling_MLP_CH467160_Augmentation_Test5\\CH467160_perChannelScaling_MLP_Augmentation_Test5_20250604.pt",
+    "epoch": 1089,
+    "val_loss": 0.006015823921188712,
+    "loss_H": 0.002768094651401043,
+    "loss_Pcv": 0.009263552841730416
+  },
+  "note": "Augmentation_Test5",
+  "note detail": "alpha=0.5、先家初始點再加數據增強、batchsize=256、只跑90度"
+}
