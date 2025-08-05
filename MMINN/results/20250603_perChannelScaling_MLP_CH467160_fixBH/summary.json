@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_fixBH_20250603",
+  "timestamp": "2025-06-03T22:33:07.904588",
+  "duration_sec": 3566.5456485000905,
+  "config": {
+    "BATCH_SIZE": 512,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250603_perChannelScaling_MLP_CH467160_fixBH\\CH467160_perChannelScaling_MLP_fixBH_20250603.pt",
+    "epoch": 1128,
+    "val_loss": 0.005733221769332886,
+    "loss_H": 0.0030102464370429516,
+    "loss_Pcv": 0.008456196635961533
+  },
+  "note": "fixBH",
+  "note detail": "alpha=0.5、batchsize=512"
+}

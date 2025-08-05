@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160__20250723",
+  "timestamp": "2025-07-23T13:57:58.481724",
+  "duration_sec": 6280.713857399998,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250723_removeN_MLP_CH467160_\\CH467160_removeN_MLP__20250723.pt",
+    "epoch": 957,
+    "val_loss": 0.012323327052096525,
+    "loss_H": 0.005762845433006684,
+    "loss_Pcv": 0.018883808981627226
+  },
+  "note": "",
+  "note detail": "輸入參數N移除、alpha=0.5、先家初始點再加數據增強、batchsize=256、波形谷對谷"
+}
