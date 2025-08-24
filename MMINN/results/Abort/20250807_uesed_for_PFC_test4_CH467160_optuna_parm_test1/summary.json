@@ -1,0 +1,26 @@
+{
+  "exp_name": "CH467160_optuna_parm_test1_20250807",
+  "timestamp": "2025-08-07T18:44:52.010993",
+  "duration_sec": 4071.325068099977,
+  "config": {
+    "BATCH_SIZE": 64,
+    "DECAY_EPOCH": 455,
+    "EARLY_STOPPING_PATIENCE": 150,
+    "HIDDEN_SIZE": 40,
+    "LEARNING_RATE": 0.01,
+    "LR_SCHEDULER_GAMMA": 0.9545861499908413,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250807_uesed_for_PFC_test4_CH467160_optuna_parm_test1\\CH467160_uesed_for_PFC_test4_optuna_parm_test1_20250807.pt",
+    "epoch": 137,
+    "val_loss": Infinity,
+    "loss_H": 9.61350215220591e-05,
+    "loss_Pcv": 0.015817365478142165
+  },
+  "note": "optuna_parm_test1",
+  "note detail": "使用optuna的參數"
+}

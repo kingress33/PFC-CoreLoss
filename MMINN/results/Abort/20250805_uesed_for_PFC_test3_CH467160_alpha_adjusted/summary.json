@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_alpha_adjusted_20250805",
+  "timestamp": "2025-08-05T21:47:07.949150",
+  "duration_sec": 2182.9453644999303,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250805_uesed_for_PFC_test3_CH467160_alpha_adjusted\\CH467160_uesed_for_PFC_test3_alpha_adjusted_20250805.pt",
+    "epoch": 0,
+    "val_loss": Infinity,
+    "loss_H": 0.001698271429631859,
+    "loss_Pcv": Infinity
+  },
+  "note": "alpha_adjusted",
+  "note detail": "調整alpha_移除d2B(設為0)"
+}

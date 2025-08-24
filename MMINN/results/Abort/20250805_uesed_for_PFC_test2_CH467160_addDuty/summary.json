@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_addDuty_20250805",
+  "timestamp": "2025-08-05T20:06:20.443557",
+  "duration_sec": 3065.67656740034,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250805_uesed_for_PFC_test2_CH467160_addDuty\\CH467160_uesed_for_PFC_test2_addDuty_20250805.pt",
+    "epoch": 469,
+    "val_loss": 0.00693913281429559,
+    "loss_H": 0.004736430244520307,
+    "loss_Pcv": 0.00914183515124023
+  },
+  "note": "addDuty",
+  "note detail": "加入正負Duty"
+}

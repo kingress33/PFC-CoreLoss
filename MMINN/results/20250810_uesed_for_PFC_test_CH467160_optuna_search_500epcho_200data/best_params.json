@@ -1,0 +1,7 @@
+{
+    "LEARNING_RATE": 0.01,
+    "BATCH_SIZE": 64,
+    "HIDDEN_SIZE": 40,
+    "OPERATOR_SIZE": 30,
+    "LR_SCHEDULER_GAMMA": 0.99
+}

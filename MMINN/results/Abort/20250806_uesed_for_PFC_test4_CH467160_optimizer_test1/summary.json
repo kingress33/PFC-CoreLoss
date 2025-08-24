@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_optimizer_test1_20250806",
+  "timestamp": "2025-08-06T20:28:35.222061",
+  "duration_sec": 3749.3259751000005,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250806_uesed_for_PFC_test4_CH467160_optimizer_test1\\CH467160_uesed_for_PFC_test4_optimizer_test1_20250806.pt",
+    "epoch": 577,
+    "val_loss": Infinity,
+    "loss_H": 0.0004809037927770987,
+    "loss_Pcv": 0.008044101996347308
+  },
+  "note": "optimizer_test1",
+  "note detail": "加入學習率調度器"
+}

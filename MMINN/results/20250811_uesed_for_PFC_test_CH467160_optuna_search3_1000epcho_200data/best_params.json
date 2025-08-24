@@ -1,0 +1,6 @@
+{
+    "LEARNING_RATE": 0.05,
+    "BATCH_SIZE": 128,
+    "HIDDEN_SIZE": 20,
+    "OPERATOR_SIZE": 20
+}

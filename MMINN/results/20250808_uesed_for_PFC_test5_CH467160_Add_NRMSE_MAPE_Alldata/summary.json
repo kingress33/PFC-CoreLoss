@@ -1,0 +1,26 @@
+{
+  "exp_name": "CH467160_Add_NRMSE_MAPE_Alldata_20250808",
+  "timestamp": "2025-08-08T16:57:32.875929",
+  "duration_sec": 12734.361431600002,
+  "config": {
+    "BATCH_SIZE": 64,
+    "DECAY_EPOCH": 455,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1000,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250808_uesed_for_PFC_test5_CH467160_Add_NRMSE_MAPE_Alldata\\CH467160_uesed_for_PFC_test5_Add_NRMSE_MAPE_Alldata_20250808.pt",
+    "epoch": 544,
+    "val_loss": Infinity,
+    "loss_H": 8.761574514210224,
+    "loss_Pcv": 7.029989594593644
+  },
+  "note": "Add_NRMSE_MAPE_Alldata",
+  "note detail": "使用準確度儲存最佳模型，全部train資料"
+}

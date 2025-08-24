@@ -1,0 +1,25 @@
+{
+  "exp_name": "CH467160_Add_NRMSE_MAPE_parm1_200data_20250808",
+  "timestamp": "2025-08-08T20:06:42.372712",
+  "duration_sec": 1506.3747939000023,
+  "config": {
+    "BATCH_SIZE": 128,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.05,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1000,
+    "OPERATOR_SIZE": 20,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250808_uesed_for_PFC_test5_CH467160_Add_NRMSE_MAPE_parm1_200data\\CH467160_uesed_for_PFC_test5_Add_NRMSE_MAPE_parm1_200data_20250808.pt",
+    "epoch": 976,
+    "val_loss": Infinity,
+    "loss_H": 14.245474338531494,
+    "loss_Pcv": 7.340843975543976
+  },
+  "note": "Add_NRMSE_MAPE_parm1_200data",
+  "note detail": "使用準確度儲存最佳模型，200筆_optuna參數測試1"
+}
