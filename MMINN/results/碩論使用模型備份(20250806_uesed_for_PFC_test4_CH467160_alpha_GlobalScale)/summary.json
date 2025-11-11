@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_alpha_GlobalScale_20250806",
+  "timestamp": "2025-08-06T15:10:50.154950",
+  "duration_sec": 3611.6022488,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250806_uesed_for_PFC_test4_CH467160_alpha_GlobalScale\\CH467160_uesed_for_PFC_test4_alpha_GlobalScale_20250806.pt",
+    "epoch": 541,
+    "val_loss": Infinity,
+    "loss_H": 0.0004945845721522346,
+    "loss_Pcv": 0.008009309123735875
+  },
+  "note": "alpha_GlobalScale",
+  "note detail": "調整alpha+EarlyStop_移除d2B(設為0)_把BH縮放改成全域的最大值"
+}
