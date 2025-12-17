@@ -1,0 +1,26 @@
+{
+  "exp_name": "CH467160_PFC_Dataset_Inverted_Triangle_20251124",
+  "timestamp": "2025-11-24T15:12:44.240396",
+  "duration_sec": 9193.904320900037,
+  "config": {
+    "BATCH_SIZE": 256,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_DECAY_EPOCH": 200,
+    "LR_DECAY_RATIO": 0.5,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20251124_used_old_hyperparameter_CH467160_PFC_Dataset_Inverted_Triangle\\CH467160_used_old_hyperparameter_PFC_Dataset_Inverted_Triangle_20251124.pt",
+    "epoch": 1495,
+    "val_loss": Infinity,
+    "loss_H": 25.249899923801422,
+    "loss_Pcv": 9.16708279401064
+  },
+  "note": "PFC_Dataset_Inverted_Triangle",
+  "note detail": "Dataset改成倒三角形(滿足PFC假設)"
+}

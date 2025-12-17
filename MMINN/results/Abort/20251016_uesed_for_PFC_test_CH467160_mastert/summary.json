@@ -1,0 +1,25 @@
+{
+  "exp_name": "CH467160_mastert_20251016",
+  "timestamp": "2025-10-16T11:34:43.604668",
+  "duration_sec": 1724.6367017999946,
+  "config": {
+    "BATCH_SIZE": 256,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.05,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20251016_uesed_for_PFC_test_CH467160_mastert\\CH467160_uesed_for_PFC_test_mastert_20251016.pt",
+    "epoch": 109,
+    "val_loss": Infinity,
+    "loss_H": 16.509775072336197,
+    "loss_Pcv": 24.703210592269897
+  },
+  "note": "mastert",
+  "note detail": "碩論數據跟"
+}

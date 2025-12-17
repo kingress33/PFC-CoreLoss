@@ -1,0 +1,26 @@
+{
+  "exp_name": "CH467160_Add_NRMSE_MAPE_20250807",
+  "timestamp": "2025-08-08T01:05:26.652092",
+  "duration_sec": 8161.194699999993,
+  "config": {
+    "BATCH_SIZE": 64,
+    "DECAY_EPOCH": 455,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1000,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250807_uesed_for_PFC_test5_CH467160_Add_NRMSE_MAPE\\CH467160_uesed_for_PFC_test5_Add_NRMSE_MAPE_20250807.pt",
+    "epoch": 972,
+    "val_loss": Infinity,
+    "loss_H": 6.982176750898361,
+    "loss_Pcv": 13.816615054383874
+  },
+  "note": "Add_NRMSE_MAPE",
+  "note detail": "使用準確度儲存最佳模型，data只有1000筆"
+}

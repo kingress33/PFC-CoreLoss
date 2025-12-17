@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_addDuty_removed2B_20250805",
+  "timestamp": "2025-08-05T17:51:49.343328",
+  "duration_sec": 2841.7312457999215,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250805_uesed_for_PFC_test2_CH467160_addDuty_removed2B\\CH467160_uesed_for_PFC_test2_addDuty_removed2B_20250805.pt",
+    "epoch": 371,
+    "val_loss": 0.005024603800848126,
+    "loss_H": 0.0021477643167600036,
+    "loss_Pcv": 0.007901443052105606
+  },
+  "note": "addDuty_removed2B",
+  "note detail": "加入正負Duty, 移除d2B/dt(輸入0資料而已)"
+}

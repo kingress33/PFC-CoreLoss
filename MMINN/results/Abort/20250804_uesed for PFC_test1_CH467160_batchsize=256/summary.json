@@ -1,0 +1,27 @@
+{
+  "exp_name": "CH467160_batchsize=256_20250804",
+  "timestamp": "2025-08-04T20:11:45.690505",
+  "duration_sec": 1519.1956195998937,
+  "config": {
+    "BATCH_SIZE": 256,
+    "DECAY_EPOCH": 200,
+    "DECAY_RATIO": 0.5,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_SCHEDULER_GAMMA": 0.99,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS": 1500,
+    "OPERATOR_SIZE": 30,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20250804_uesed for PFC_test1_CH467160_batchsize=256\\CH467160_uesed for PFC_test1_batchsize=256_20250804.pt",
+    "epoch": 1487,
+    "val_loss": 0.0045870644971728325,
+    "loss_H": 0.004614518489688635,
+    "loss_Pcv": 0.004559610038995743
+  },
+  "note": "batchsize=256",
+  "note detail": "移除30圈的訓練data"
+}
