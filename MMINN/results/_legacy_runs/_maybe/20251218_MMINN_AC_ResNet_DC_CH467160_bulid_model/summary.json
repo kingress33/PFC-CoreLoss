@@ -1,0 +1,29 @@
+{
+  "exp_name": "CH467160_bulid_model_20251218",
+  "timestamp": "2025-12-18T21:08:24.887806",
+  "duration_sec": 1760.2295417999849,
+  "config": {
+    "BATCH_SIZE": 1024,
+    "DOWNSAMPLE": 1024,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_DECAY_EPOCH": 200,
+    "LR_DECAY_RATIO": 0.5,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS_PHASE1": 1000,
+    "NUM_EPOCHS_PHASE2": 1000,
+    "OPERATOR_SIZE": 30,
+    "PLOT_INTERVAL": 100,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\20251218_MMINN_AC_ResNet_DC_CH467160_bulid_model\\CH467160_MMINN_AC_ResNet_DC_bulid_model_20251218.pt",
+    "epoch": 1433,
+    "val_loss": 29.18437123298645,
+    "loss_H": 29.18437123298645,
+    "loss_Pcv": 0.0
+  },
+  "note": "bulid_model",
+  "note detail": "Dataset改成倒三角形(滿足PFC假設)、建立AC和DC的DataLoader、準備建立模型"
+}

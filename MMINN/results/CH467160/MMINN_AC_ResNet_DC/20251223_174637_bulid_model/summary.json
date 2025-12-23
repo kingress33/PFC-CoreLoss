@@ -1,0 +1,29 @@
+{
+  "exp_name": "CH467160_MMINN_AC_ResNet_DC_20251223_174637",
+  "timestamp": "2025-12-23T18:23:40.107542",
+  "duration_sec": 2218.4011916997842,
+  "config": {
+    "BATCH_SIZE": 512,
+    "DOWNSAMPLE": 1024,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_DECAY_EPOCH": 200,
+    "LR_DECAY_RATIO": 0.5,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS_PHASE1": 1000,
+    "NUM_EPOCHS_PHASE2": 1000,
+    "OPERATOR_SIZE": 30,
+    "PLOT_INTERVAL": 100,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\CH467160\\MMINN_AC_ResNet_DC\\20251223_174637_bulid_model\\CH467160_MMINN_AC_ResNet_DC_bulid_model_20251223_174637.pt",
+    "epoch": 1243,
+    "val_loss": 24.05284494161606,
+    "loss_H": 24.05284494161606,
+    "loss_Pcv": 0.0
+  },
+  "note": "bulid_model",
+  "note detail": "[輸入特徵比較]考量d2B+N+Hdc效果_batch512_lr0.002_hidden30_op30_maxout1"
+}

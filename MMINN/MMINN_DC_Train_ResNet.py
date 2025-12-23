@@ -24,6 +24,7 @@ import time
 from datetime import datetime
 import json
 import pandas as pd
+from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path  #python用
 
 try:
@@ -39,8 +40,8 @@ except NameError:
 # Unified Hyperparameter Configuration
 class Config:
     SEED = 1
-    NUM_EPOCHS_PHASE1 = 1000
-    NUM_EPOCHS_PHASE2 = 1000
+    NUM_EPOCHS_PHASE1 = 10
+    NUM_EPOCHS_PHASE2 = 10
 
     BATCH_SIZE = 1024
     LEARNING_RATE = 0.002
@@ -107,6 +108,8 @@ def get_dataloader(data_B,
                    data_Pcv,
                    global_B_max,
                    global_H_max,
+                   global_dB_max,
+                   global_d2B_max,
                    n_init=16,
                    norm=None):
 
@@ -152,10 +155,14 @@ def get_dataloader(data_B,
     dB = torch.diff(B, dim=1, prepend=B[:, :1])
     dB_dt = dB * (seq_length * F.view(-1, 1, 1))  # 真實斜率
 
+    d2B = torch.diff(dB_dt, dim=1, prepend=dB_dt[:, :1])
+    d2B_dt2 = d2B * (seq_length * F.view(-1, 1, 1))
+
     # ── 4. 計算二階導數 ─────────────────────────
     in_B = B / global_B_max
     out_H = H / global_H_max
-    in_dB_dt = dB_dt / global_B_max
+    in_dB_dt = dB_dt / global_dB_max
+    in_d2B_dt = d2B_dt2 / global_d2B_max
 
     # ── 5. 純量特徵：計算 z-score 參數 ─────────────
     # Data Normalization (套用 norm)
@@ -181,7 +188,8 @@ def get_dataloader(data_B,
         (
             in_B,  # ① B
             dB / global_B_max,  # ② ΔB
-            in_dB_dt  # ③ dB/dt
+            in_dB_dt,  # ③ dB/dt
+            in_d2B_dt  # ④ d²B/dt²
         ),
         dim=2)  #
 
@@ -426,7 +434,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-class HARDCORECorrectionCNN(nn.Module):
+class CorrectionCNN(nn.Module):
 
     def __init__(self, scalar_dim, hidden_dim=16):
         # 論文建議參數極少，hidden_dim 設 16 或 8 效果最好且最快
@@ -507,25 +515,23 @@ class HybridModel(nn.Module):
 
         # 2. 修正層 (CNN) - 負責預測 DC 造成的殘差
         # var 對應: 0:F, 1:T, 2:Hdc, 3:N, 4:DutyP, 5:DutyN
-        # 定義 CNN 要看 var 中的欄位: F, T, Hdc (前三個)
+        # 定義 CNN 要看 var 中的欄位: F, T, Hdc, N (前四個)
 
-        self.resnet_feature_indices = [0, 1, 2]
+        self.resnet_feature_indices = [0, 1, 2, 3]
         scalar_dim = len(self.resnet_feature_indices)
 
-        # self.resnet = SimpleCorrectionCNN(
-        #     scalar_dim=scalar_dim,
-        #     hidden_dim=32  # 這是 CNN 內部的隱藏層寬度
-        # )
-
-        self.resnet = HARDCORECorrectionCNN(scalar_dim=scalar_dim,
-                                            hidden_dim=16)  # 輕量化，訓練速度會飛快
+        self.resnet = CorrectionCNN(scalar_dim=scalar_dim,
+                                    hidden_dim=16)  # 輕量化，訓練速度會飛快
 
     def forward(self, x, var, amps, s0):
         # 1. MMINN 預測 H_ac (它內部會只看 F, T)
         H_ac = self.mminn(x, var, amps, s0)
 
         # 2. 準備 CNN 的輸入
-        # 根據 indices 挑選變數 (挑 F, T, Hdc)
+        # 取出第 4 個通道 (d2B/dt2) 給 ResNet
+        d2b_dt2 = x[:, :, 3:4]
+
+        # 根據 indices 挑選變數 (挑 F, T, Hdc, N)
         var_resnet = var[:, self.resnet_feature_indices]
 
         # 3. CNN 預測修正量 H_dc_correction
@@ -719,7 +725,8 @@ def plot_comparison(model,
                     phase_name,
                     save_dir,
                     device,
-                    num_samples=2):
+                    num_samples=2,
+                    return_fig=False):
     model.eval()
 
     # 抓一個 Batch 出來畫
@@ -781,13 +788,20 @@ def plot_comparison(model,
         if i == 0: plt.legend()
         plt.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    # 存檔
-    save_path = os.path.join(save_dir, f"{phase_name}_Ep{epoch}_Compare.svg")
-    plt.savefig(save_path)
-    plt.show()
-    plt.close()  # 關閉圖表釋放記憶體
-    print(f"[Plot] Saved comparison figure to {save_path}")
+    fig = plt.figure(figsize=(12, 5))
+
+    if return_fig:
+        # 如果是要給 TensorBoard，直接回傳 fig，不要 show 也不要 close
+        return fig
+    else:
+        # 原本的存檔邏輯
+        save_path = os.path.join(save_dir,
+                                 f"{phase_name}_Ep{epoch}_Compare.svg")
+        plt.savefig(save_path)
+        # plt.show()
+        plt.close(fig)  # 記得關掉釋放記憶體
+        print(f"[Plot] Saved to {save_path}")
+        return None
 
 
 def get_time_str(start):
@@ -858,7 +872,8 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
                 
                  
     """)
-
+    tb_writer = SummaryWriter(
+        log_dir=os.path.join(logger.result_dir, "tensorboard_logs"))
     start_time = time.perf_counter()
 
     # 1. 初始化混合模型
@@ -882,9 +897,6 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
         "val_loss": [],
         "val_nrmse": []
     }
-
-    # 繪圖用的固定樣本索引 (隨機抓 3 筆來畫)
-    fixed_idx = None
 
     # =========================================================================
     # 🚀 Phase 1: 訓練 MMINN (只用 AC 數據)
@@ -943,27 +955,59 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
         history["val_nrmse"].append(avg_val_nrmse)
 
         # 簡單 Log
-        if (epoch + 1) % 10 == 0:
-            current_lr = scheduler.get_last_lr()[0]
-            time_str = get_time_str(start_time)
-            print(
-                f"[Phase 1] Ep {epoch+1}/{PHASE1_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
-            )
+        # if (epoch + 1) % 10 == 0:
+        #     current_lr = scheduler.get_last_lr()[0]
+        #     time_str = get_time_str(start_time)
+        #     print(
+        #         f"[Phase 1] Ep {epoch+1}/{PHASE1_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
+        #     )
 
         # 儲存 Phase 1 最佳模型 (基於 NRMSE)
         if avg_val_nrmse < best_phase1_nrmse:
             best_phase1_nrmse = avg_val_nrmse
             torch.save(model.state_dict(),
                        os.path.join(result_dir, "phase1_best.pt"))
-            if (epoch + 1) % 10 == 0:
-                print(
-                    f"  --> ★ Phase 1 Best Model Saved! NRMSE: {best_phase1_nrmse:.4f}%"
-                )
 
-        # --- 繪圖 (H比較 & BH比較) ---
-        if (epoch + 1) % Config.PLOT_INTERVAL == 0:
-            plot_comparison(model, valid_loader_AC, epoch + 1, "Phase1",
-                            result_dir, device)
+            time_str = get_time_str(start_time)
+            current_lr = scheduler.get_last_lr()[0]
+
+            print(
+                f"[Phase 1] Ep {epoch+1}/{PHASE1_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
+            )
+            print(
+                f"  --> ★ Phase 1 Best Model Saved! NRMSE: {best_phase1_nrmse:.4f}%"
+            )
+            # --- 繪圖與寫入 TensorBoard ---
+            # 1. 取得 Figure 物件
+            fig = plot_comparison(model,
+                                  valid_loader_AC,
+                                  epoch + 1,
+                                  "Phase1",
+                                  result_dir,
+                                  device,
+                                  return_fig=True)  # 告訴它我要物件
+
+            # 2. 寫入 TensorBoard
+            if fig is not None:
+                # add_figure(標籤名稱, 圖物件, 目前步數)
+                tb_writer.add_figure('Validation/Waveform_Comparison',
+                                     fig,
+                                     global_step=epoch)
+
+                # 3. 重要！寫入後要手動關閉 Figure，不然記憶體會爆
+                plt.close(fig)
+
+            # plot_comparison(model, valid_loader_AC, epoch + 1, "Phase1",
+            #                 result_dir, device)
+
+            # if epoch % 10 == 0:
+            #     plot_comparison(model, valid_loader_AC, epoch + 1, "Phase1",
+            #                     result_dir, device)
+
+        # # --- 繪圖 (H比較 & BH比較) ---
+        # if (epoch + 1) % Config.PLOT_INTERVAL == 0:
+        #     plot_comparison(model, valid_loader_AC, epoch + 1, "Phase1",
+        #                     result_dir, device)
 
     print(f"✅ Phase 1 Complete. Best AC NRMSE: {best_phase1_nrmse:.4f}%")
 
@@ -1034,19 +1078,55 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
         history["val_loss"].append(avg_val_loss)
         history["val_nrmse"].append(avg_val_nrmse)
 
-        if (epoch + 1) % 10 == 0:
-            current_lr = scheduler.get_last_lr()[0]
-            time_str = get_time_str(start_time)
-            print(
-                f"[Phase 2] Ep {epoch+1}/{PHASE2_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
-            )
+        # if (epoch + 1) % 10 == 0:
+        #     current_lr = scheduler.get_last_lr()[0]
+        #     time_str = get_time_str(start_time)
+        #     print(
+        #         f"[Phase 2] Ep {epoch+1}/{PHASE2_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
+        #     )
 
         # --- Early Stopping (基於 NRMSE) ---
         if avg_val_nrmse < best_val_nrmse:
             best_val_nrmse = avg_val_nrmse
             patience_counter = 0
             torch.save(model.state_dict(), model_save_path)
+
+            time_str = get_time_str(start_time)
+            current_lr = scheduler.get_last_lr()[0]
+
+            print(
+                f"[Phase 2] Ep {epoch+1}/{PHASE2_EPOCHS} | Time: {time_str} | Train: {avg_train_loss:.6f} | Val NRMSE: {avg_val_nrmse:.4f}% | LR: {current_lr:.6f}"
+            )
             print(f"  --> ★ Best Model Saved! NRMSE: {best_val_nrmse:.4f}%")
+
+            # --- 繪圖與寫入 TensorBoard ---
+            # 1. 取得 Figure 物件
+            fig = plot_comparison(model,
+                                  valid_loader_DC,
+                                  PHASE1_EPOCHS + epoch + 1,
+                                  "Phase2",
+                                  result_dir,
+                                  device,
+                                  return_fig=True)  # 告訴它我要物件
+
+            # 2. 寫入 TensorBoard
+            if fig is not None:
+                # add_figure(標籤名稱, 圖物件, 目前步數)
+                tb_writer.add_figure('Validation/Waveform_Comparison',
+                                     fig,
+                                     global_step=epoch)
+
+                # 3. 重要！寫入後要手動關閉 Figure，不然記憶體會爆
+                plt.close(fig)
+
+            # plot_comparison(model, valid_loader_DC, PHASE1_EPOCHS + epoch + 1,
+            #                 "Phase2", result_dir, device)
+            
+            # if epoch % 10 == 0:
+            #     plot_comparison(model, valid_loader_DC,
+            #                     PHASE1_EPOCHS + epoch + 1, "Phase2",
+            #                     result_dir, device)
+
         else:
             patience_counter += 1
 
@@ -1054,14 +1134,14 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
             print(f" Early stopping triggered at epoch {epoch+1}")
             break
 
-        # --- 繪圖 (H比較 & BH比較) ---
-        if (epoch + 1) % Config.PLOT_INTERVAL == 0:
-            plot_comparison(model, valid_loader_DC, PHASE1_EPOCHS + epoch + 1,
-                            "Phase2", result_dir, device)
-            if (epoch + 1) % 10 == 0:
-                print(
-                    f"  --> ★ Phase 2 Best Model Saved! NRMSE: {best_val_nrmse:.4f}%"
-                )
+        # # --- 繪圖 (H比較 & BH比較) ---
+        # if (epoch + 1) % Config.PLOT_INTERVAL == 0:
+        #     plot_comparison(model, valid_loader_DC, PHASE1_EPOCHS + epoch + 1,
+        #                     "Phase2", result_dir, device)
+        #     if (epoch + 1) % 10 == 0:
+        #         print(
+        #             f"  --> ★ Phase 2 Best Model Saved! NRMSE: {best_val_nrmse:.4f}%"
+        #         )
 
 
 # 結束訓練
@@ -1091,6 +1171,7 @@ def train_model(norm, train_loader_AC, valid_loader_AC, train_loader_DC,
     hist_df.to_json(json_path, orient="records", force_ascii=False, indent=2)
     print(f"✅ History saved to {json_path}")
 
+    tb_writer.close()
 
 # %% [markdown]
 # ### Start train!
@@ -1111,8 +1192,24 @@ def main():
     print("正在計算全球最大值...")
     GLOBAL_B_MAX = np.abs(data_B).max()
     GLOBAL_H_MAX = np.abs(data_H).max()
+    seq_len = 1024
+
+    # 計算 dB/dt (一階)
+    # axis=1 代表沿著時間軸微分
+    np_dB = np.diff(data_B, axis=1, prepend=data_B[:, :1])
+    # 乘上頻率縮放 (注意 data_F 形狀要對)
+    np_dB_dt = np_dB * (seq_len * data_F.reshape(-1, 1))
+    GLOBAL_DB_DT_MAX = np.max(np.abs(np_dB_dt))  # 算出全域最大 dB/dt
+
+    # 計算 d2B/dt2 (二階)
+    np_d2B = np.diff(np_dB_dt, axis=1, prepend=np_dB_dt[:, :1])
+    np_d2B_dt2 = np_d2B * (seq_len * data_F.reshape(-1, 1))
+    GLOBAL_D2B_DT2_MAX = np.max(np.abs(np_d2B_dt2))  # 算出全域最大 d2B/dt2
+
     print(f"Global B Max: {GLOBAL_B_MAX}")
     print(f"Global H Max: {GLOBAL_H_MAX}")
+    print(f"Global dB/dt Max: {GLOBAL_DB_DT_MAX:.2e}")  # 印出來檢查 (應該是 10^5 等級)
+    print(f"Global d2B/dt2 Max: {GLOBAL_D2B_DT2_MAX:.2e}")
 
     print("計算全域 Normalization 參數 (基於完整數據)...")
 
@@ -1176,6 +1273,8 @@ def main():
         ac_Pcv,
         GLOBAL_B_MAX,
         GLOBAL_H_MAX,
+        GLOBAL_DB_DT_MAX,
+        GLOBAL_D2B_DT2_MAX,
         norm=global_norm  # <--- 傳入全域標準
     )
 
@@ -1192,6 +1291,8 @@ def main():
         dc_Pcv,
         GLOBAL_B_MAX,
         GLOBAL_H_MAX,
+        GLOBAL_DB_DT_MAX,
+        GLOBAL_D2B_DT2_MAX,
         norm=global_norm  # <--- 傳入全域標準
     )
 
