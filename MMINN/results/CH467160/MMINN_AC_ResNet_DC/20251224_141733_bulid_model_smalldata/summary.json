@@ -1,0 +1,30 @@
+{
+  "exp_name": "CH467160_MMINN_AC_ResNet_DC_20251224_141733",
+  "timestamp": "2025-12-24T15:27:48.352028",
+  "duration_sec": 4210.941126199905,
+  "config": {
+    "BATCH_SIZE": 512,
+    "DOWNSAMPLE": 1024,
+    "EARLY_STOPPING_PATIENCE": 100,
+    "HIDDEN_SIZE": 30,
+    "LEARNING_RATE": 0.002,
+    "LR_DECAY_EPOCH": 200,
+    "LR_DECAY_RATIO": 0.5,
+    "MAXOUT_H": 1,
+    "NUM_EPOCHS_PHASE1": 1000,
+    "NUM_EPOCHS_PHASE2": 3000,
+    "OPERATOR_SIZE": 30,
+    "PLOT_INTERVAL": 100,
+    "RESNET_HIDDEN_SIZE": 64,
+    "SEED": 1
+  },
+  "best_model": {
+    "path": "results\\CH467160\\MMINN_AC_ResNet_DC\\20251224_141733_bulid_model_smalldata\\overfit_best.pt",
+    "epoch": 1300,
+    "val_loss": 19.05079185962677,
+    "loss_H": 19.05079185962677,
+    "loss_Pcv": 0.0
+  },
+  "note": "bulid_model_smalldata",
+  "note detail": "[輸入特徵比較]考量d2B+N+Hdc效果_d2B、dBg使用未對數log"
+}
