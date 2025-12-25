@@ -1,0 +1,19 @@
+{
+  "BATCH_SIZE": 128,
+  "DOWNSAMPLE": 1024,
+  "EARLY_STOPPING_PATIENCE": 100,
+  "HIDDEN_SIZE": 30,
+  "LEARNING_RATE": 0.002,
+  "LR_DECAY_EPOCH": 200,
+  "LR_DECAY_RATIO": 0.5,
+  "MAXOUT_H": 1,
+  "MODE": "test_only",
+  "NUM_EPOCHS_PHASE1": 2000,
+  "NUM_EPOCHS_PHASE2": 2000,
+  "OPERATOR_SIZE": 30,
+  "PRETRAINED_PHASE1_PATH": "請填入你的_phase1_best.pt_路徑",
+  "RESNET_HIDDEN_SIZE": 64,
+  "SEED": 1,
+  "TEST_MODEL_PATH": "D:\\ProgramFiles\\Jupyter\\ECIE\\PFC_ML\\MMINN\\results\\CH467160\\MMINN_AC_ResNet_DC\\20251225_161439_phase2_best_final.pt",
+  "USE_PRETRAINED_PHASE1": false
+}
